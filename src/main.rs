@@ -27,23 +27,18 @@ fn main() {
 fn lex(source: &String) -> Result<Vec<Token>, String> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut iter = source.chars().peekable();
+    while let Some(_) = iter.next_if(|x| x.is_whitespace()) {}
     while let Some(c) = iter.next() {
-        match c {
-            '(' => tokens.push(Token::LeftPar),
-            ')' => tokens.push(Token::RightPar),
-            '"' => match get_quoted(&mut iter) {
-                Ok(t) => tokens.push(t),
-                Err(error) => return Err(error),
-            },
-            '0'..='9' | '.' => match get_number(c, &mut iter) {
-                Ok(t) => tokens.push(t),
-                Err(error) => return Err(error),
-            },
-            ' ' | '\n' | '\r' => continue,
-            _ => match get_str(c, &mut iter) {
-                Ok(t) => tokens.push(t),
-                Err(error) => return Err(error),
-            },
+        let token = match c {
+            '(' => Ok(Token::LeftPar),
+            ')' => Ok(Token::RightPar),
+            '"' => get_quoted(&mut iter),
+            '0'..='9' | '.' => get_number(c, &mut iter),
+            _ => get_str(c, &mut iter),
+        };
+        match token {
+            Ok(t) => tokens.push(t),
+            Err(error) => return Err(error.to_string()),
         }
     }
     Ok(tokens)
