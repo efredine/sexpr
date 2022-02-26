@@ -1,3 +1,4 @@
+use crate::Node::Atom;
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -11,6 +12,17 @@ enum Token {
     RightPar,
 }
 
+#[derive(Debug)]
+enum Node<'a> {
+    Expr(ExprNode<'a>),
+    Atom(&'a Token),
+}
+
+#[derive(Debug)]
+struct ExprNode<'a> {
+    pub children: Vec<Node<'a>>,
+}
+
 fn main() {
     let expr = String::from(
         "((data \"quoted data\" 123 4.5)
@@ -20,8 +32,10 @@ fn main() {
     // let simple = String::from("( abc 123 0.67 )  ( 100.67 )");
     // let simple = String::from("0.67.67");
     // println!("{}", simple);
-    let tokens = lex(&expr);
-    println!("{:?}", tokens.unwrap());
+    let tokens = lex(&expr).unwrap();
+    println!("{:?}", tokens);
+    let expression = get_expressions(&tokens).unwrap();
+    println!("{:?}", expression);
 }
 
 fn lex(source: &String) -> Result<Vec<Token>, String> {
@@ -40,6 +54,7 @@ fn lex(source: &String) -> Result<Vec<Token>, String> {
             Ok(t) => tokens.push(t),
             Err(error) => return Err(error.to_string()),
         }
+        while let Some(_) = iter.next_if(|x| x.is_whitespace()) {}
     }
     Ok(tokens)
 }
@@ -104,4 +119,37 @@ fn get_quoted(iter: &mut Peekable<Chars>) -> Result<Token, String> {
         }
     }
     Err(format!("Invalid quoted string."))
+}
+
+fn get_expressions(tokens: &Vec<Token>) -> Result<Node, String> {
+    let mut iter = tokens.iter().peekable();
+    if let Some(_) = iter.peek() {
+        let token = iter.next().unwrap().clone();
+        return match token {
+            Token::LeftPar => parse_expression(&mut iter),
+            _ => Err(format!("Invalid root expression.")),
+        };
+    }
+    Err(format!("Missing root expression."))
+}
+
+fn parse_expression<'a>(
+    iter: &mut Peekable<std::slice::Iter<'a, Token>>,
+) -> Result<Node<'a>, String> {
+    let mut expr = ExprNode {
+        children: Vec::new(),
+    };
+    while let Some(token) = iter.next() {
+        let node = match token {
+            Token::LeftPar => parse_expression(iter),
+            Token::RightPar => return Ok(Node::Expr(expr)),
+            _ => Ok(Atom(&token)),
+        };
+        match node {
+            Ok(n) => expr.children.push(n),
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(format!("Missing closing paren"))
 }
