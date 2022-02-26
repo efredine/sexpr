@@ -29,13 +29,12 @@ fn main() {
  (data (!@# (4.5) \"(more\" \"data)\")))",
     );
 
-    // let simple = String::from("( abc 123 0.67 )  ( 100.67 )");
-    // let simple = String::from("0.67.67");
-    // println!("{}", simple);
+    println!("{}", expr);
     let tokens = lex(&expr).unwrap();
     println!("{:?}", tokens);
     let expression = get_expressions(&tokens).unwrap();
     println!("{:?}", expression);
+    println!("{}", format_expression(&expression));
 }
 
 fn lex(source: &String) -> Result<Vec<Token>, String> {
@@ -152,4 +151,20 @@ fn parse_expression<'a>(
     }
 
     Err(format!("Missing closing paren"))
+}
+
+fn format_expression(expression: &Node) -> String {
+    match expression {
+        Node::Atom(t) => match t {
+            Token::String(s) => s.clone(),
+            Token::Int(i) => i.to_string(),
+            Token::Float(f) => f.to_string(),
+            Token::Quoted(q) => format!("\"{}\"", q),
+            _ => String::from(""),
+        },
+        Node::Expr(e) => {
+            let string_list: Vec<String> = e.children.iter().map(format_expression).collect();
+            format!("({})", string_list.join(" "))
+        }
+    }
 }
