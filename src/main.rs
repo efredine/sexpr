@@ -115,9 +115,8 @@ fn get_quoted(iter: &mut Peekable<Chars>) -> Result<Token, String> {
 }
 
 fn get_expression(tokens: &Vec<Token>) -> Result<Expr, String> {
-    let mut iter = tokens.iter().peekable();
-    if let Some(_) = iter.peek() {
-        let token = iter.next().unwrap().clone();
+    let mut iter = tokens.iter();
+    if let Some(token) = iter.next() {
         return match token {
             Token::LeftPar => parse_expression(&mut iter),
             _ => Err(format!("Invalid root expression.")),
@@ -126,9 +125,7 @@ fn get_expression(tokens: &Vec<Token>) -> Result<Expr, String> {
     Err(format!("Missing root expression."))
 }
 
-fn parse_expression<'a>(
-    iter: &mut Peekable<std::slice::Iter<'a, Token>>,
-) -> Result<Expr<'a>, String> {
+fn parse_expression<'a>(iter: &mut std::slice::Iter<'a, Token>) -> Result<Expr<'a>, String> {
     let mut expr_list: Vec<Expr<'a>> = Vec::new();
     while let Some(token) = iter.next() {
         let node = match token {
