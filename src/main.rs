@@ -40,7 +40,8 @@ fn lex(source: &String) -> Result<Vec<Token>, String> {
             '(' => Ok(Token::LeftPar),
             ')' => Ok(Token::RightPar),
             '"' => get_quoted(&mut iter),
-            '0'..='9' | '.' => get_number(c, &mut iter),
+            '0'..='9' => get_number(c, &mut iter),
+            '.' => get_float(String::from(c), &mut iter),
             _ => get_str(c, &mut iter),
         };
         match token {
@@ -77,27 +78,27 @@ fn get_str(first: char, iter: &mut Peekable<Chars>) -> Result<Token, String> {
 }
 
 fn get_number(first: char, iter: &mut Peekable<Chars>) -> Result<Token, String> {
-    let mut dot_count = if first == '.' { 1 } else { 0 };
     let mut result = String::from(first);
     while let Some(c) = iter.next_if(|&x| x.is_numeric() || x == '.') {
+        result.push(c);
         if c == '.' {
-            dot_count += 1
+            return get_float(result, iter);
         }
-        if dot_count > 1 {
-            return Err(format!("Invalid number format."));
-        }
+    }
+    match result.parse::<isize>() {
+        Ok(n) => atom_end(Token::Int(n), iter.peek()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn get_float(first: String, iter: &mut Peekable<Chars>) -> Result<Token, String> {
+    let mut result = String::from(first);
+    while let Some(c) = iter.next_if(|&x| x.is_numeric()) {
         result.push(c);
     }
-    if dot_count == 0 {
-        match result.parse::<isize>() {
-            Ok(n) => atom_end(Token::Int(n), iter.peek()),
-            Err(error) => Err(error.to_string()),
-        }
-    } else {
-        match result.parse::<f64>() {
-            Ok(n) => atom_end(Token::Float(n), iter.peek()),
-            Err(error) => Err(error.to_string()),
-        }
+    match result.parse::<f64>() {
+        Ok(n) => atom_end(Token::Float(n), iter.peek()),
+        Err(error) => Err(error.to_string()),
     }
 }
 
