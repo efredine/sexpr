@@ -39,9 +39,9 @@ fn lex(source: &String) -> Result<Vec<Token>, String> {
             '(' => Some(Ok(Token::LeftPar)),
             ')' => Some(Ok(Token::RightPar)),
             '"' => Some(get_quoted(&mut iter)),
-            '0'..='9' => Some(get_number(c, &mut iter)),
             '.' => Some(get_float(String::from(c), &mut iter)),
-            ' ' | '\n' | '\r' => None,
+            c if c.is_numeric() || c == '-' => Some(get_number(c, &mut iter)),
+            c if c.is_whitespace() => None,
             _ => Some(get_str(c, &mut iter)),
         };
         match token {
