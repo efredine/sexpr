@@ -75,8 +75,12 @@ impl<'a> TokenIterator<'a> {
             Err(error) => Err(error.to_string()),
         }
     }
+}
 
-    fn next(&mut self) -> Option<Result<Token<'a>, String>> {
+impl<'a> Iterator for TokenIterator<'a> {
+    type Item = Result<Token<'a>, String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
         while let Some((i, c)) = self.iter.next() {
             let token = match c {
                 '(' => Some(Ok(Token::LeftPar)),
