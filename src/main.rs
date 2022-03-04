@@ -83,19 +83,15 @@ impl<'a> Iterator for TokenIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((i, c)) = self.iter.next() {
-            let token = match c {
-                '(' => Some(Ok(Token::LeftPar)),
-                ')' => Some(Ok(Token::RightPar)),
-                '"' => Some(self.get_quoted(i)),
-                '.' => Some(self.get_float(i)),
-                c if c.is_numeric() || c == '-' => Some(self.get_number(i)),
-                c if c.is_whitespace() => None,
-                _ => Some(self.get_str(i)),
+            match c {
+                '(' => return Some(Ok(Token::LeftPar)),
+                ')' => return Some(Ok(Token::RightPar)),
+                '"' => return Some(self.get_quoted(i)),
+                '.' => return Some(self.get_float(i)),
+                c if c.is_numeric() || c == '-' => return Some(self.get_number(i)),
+                c if c.is_whitespace() => continue,
+                _ => return Some(self.get_str(i)),
             };
-            match token {
-                Some(r) => return Some(r),
-                None => continue,
-            }
         }
         return None;
     }
