@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::str::CharIndices;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum Token<'a> {
     Int(isize),
     Float(f64),
@@ -106,7 +106,8 @@ impl<'a> Iterator for TokenIterator<'a> {
 
 fn is_atom_terminator(c: char) -> bool {
     match c {
-        ' ' | '\n' | '\r' | ')' | '(' | '"' => true,
+        ')' | '(' | '"' => true,
+        c if c.is_whitespace() => true,
         _ => false,
     }
 }
