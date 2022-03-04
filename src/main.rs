@@ -35,55 +35,55 @@ impl<'a> TokenIterator<'a> {
         TokenIterator { source, iter }
     }
 
-    fn get_str(&mut self, start: usize) -> Result<Token<'a>, Error> {
-        let mut end = start;
-        while let Some((i, _)) = self.iter.next_if(|(_, x)| !is_atom_terminator(*x)) {
-            end = i;
+    fn consume_while(
+        &mut self,
+        condition: for<'r> fn(&'r (usize, char)) -> bool,
+    ) -> Option<(usize, char)> {
+        let mut prev: Option<(usize, char)> = None;
+        while let Some(next) = self.iter.next_if(condition) {
+            prev = Option::from(next);
         }
-        atom_end(
-            Token::String(&self.source[start..end + 1]),
-            self.iter.peek(),
-        )
+        return prev;
     }
 
-    fn get_quoted(&mut self, start: usize) -> Result<Token<'a>, Error> {
-        let mut end = start;
-        while let Some((i, _)) = self.iter.next_if(|(_, x)| *x != '"') {
-            end = i;
-        }
-        let result = if end > start + 1 {
-            &self.source[start + 1..end + 1]
-        } else {
-            ""
-        };
-        if let Some((_, end)) = self.iter.next() {
-            if end == '"' {
-                return atom_end(Token::Quoted(result), self.iter.peek());
+    fn get_range(&self, start: (usize, char), end: (usize, char)) -> &'a str {
+        &self.source[start.0..end.0 + end.1.len_utf8()]
+    }
+
+    fn get_str(&mut self, start: (usize, char)) -> Result<Token<'a>, Error> {
+        let end = self
+            .consume_while(|(_, x)| !is_atom_terminator(*x))
+            .unwrap_or(start);
+        atom_end(Token::String(self.get_range(start, end)), self.iter.peek())
+    }
+
+    fn get_quoted(&mut self, start: (usize, char)) -> Result<Token<'a>, Error> {
+        let end = self.consume_while(|(_, x)| *x != '"').unwrap_or(start);
+        if let Some((_, next)) = self.iter.next() {
+            if next == '"' {
+                return atom_end(Token::Quoted(self.get_range(start, end)), self.iter.peek());
             }
         }
         Err(Error::QuoteError)
     }
 
-    fn get_float(&mut self, start: usize) -> Result<Token<'a>, Error> {
-        let mut end = start;
-        while let Some((i, _)) = self.iter.next_if(|(_, x)| x.is_numeric()) {
-            end = i;
-        }
-        match self.source[start..end + 1].parse::<f64>() {
+    fn get_float(&mut self, start: (usize, char)) -> Result<Token<'a>, Error> {
+        let end = self.consume_while(|(_, x)| x.is_numeric()).unwrap_or(start);
+        match self.get_range(start, end).parse::<f64>() {
             Ok(n) => atom_end(Token::Float(n), self.iter.peek()),
             Err(error) => Err(Error::FloatError(error)),
         }
     }
 
-    fn get_number(&mut self, start: usize) -> Result<Token<'a>, Error> {
+    fn get_number(&mut self, start: (usize, char)) -> Result<Token<'a>, Error> {
         let mut end = start;
-        while let Some((i, c)) = self.iter.next_if(|(_, x)| x.is_numeric() || *x == '.') {
-            end = i;
-            if c == '.' {
+        while let Some(next) = self.iter.next_if(|(_, x)| x.is_numeric() || *x == '.') {
+            end = next;
+            if next.1 == '.' {
                 return self.get_float(start);
             }
         }
-        match self.source[start..end + 1].parse::<isize>() {
+        match self.get_range(start, end).parse::<isize>() {
             Ok(n) => atom_end(Token::Int(n), self.iter.peek()),
             Err(error) => Err(Error::IntError(error)),
         }
@@ -94,15 +94,15 @@ impl<'a> Iterator for TokenIterator<'a> {
     type Item = Result<Token<'a>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some((i, c)) = self.iter.next() {
-            match c {
+        while let Some(next) = self.iter.next() {
+            match next.1 {
                 '(' => return Some(Ok(Token::LeftPar)),
                 ')' => return Some(Ok(Token::RightPar)),
-                '"' => return Some(self.get_quoted(i)),
-                '.' => return Some(self.get_float(i)),
-                c if c.is_numeric() || c == '-' => return Some(self.get_number(i)),
+                '"' => return Some(self.get_quoted(next)),
+                '.' => return Some(self.get_float(next)),
+                c if c.is_numeric() || c == '-' => return Some(self.get_number(next)),
                 c if c.is_whitespace() => continue,
-                _ => return Some(self.get_str(i)),
+                _ => return Some(self.get_str(next)),
             };
         }
         return None;
