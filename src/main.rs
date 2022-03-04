@@ -35,6 +35,15 @@ impl<'a> TokenIterator<'a> {
         TokenIterator { source, iter }
     }
 
+    fn atom_end(&mut self, token: Token<'a>) -> Result<Token<'a>, Error> {
+        if let Some((_, c)) = self.iter.peek() {
+            if is_atom_terminator(*c) {
+                return Ok(token);
+            }
+        }
+        Err(Error::AtomTerminationError)
+    }
+
     fn consume_while(
         &mut self,
         condition: for<'r> fn(&'r (usize, char)) -> bool,
@@ -54,14 +63,14 @@ impl<'a> TokenIterator<'a> {
         let end = self
             .consume_while(|(_, x)| !is_atom_terminator(*x))
             .unwrap_or(start);
-        atom_end(Token::String(self.get_range(start, end)), self.iter.peek())
+        self.atom_end(Token::String(self.get_range(start, end)))
     }
 
     fn get_quoted(&mut self, start: (usize, char)) -> Result<Token<'a>, Error> {
         let end = self.consume_while(|(_, x)| *x != '"').unwrap_or(start);
         if let Some((_, next)) = self.iter.next() {
             if next == '"' {
-                return atom_end(Token::Quoted(self.get_range(start, end)), self.iter.peek());
+                return self.atom_end(Token::Quoted(self.get_range(start, end)));
             }
         }
         Err(Error::QuoteError)
@@ -70,7 +79,7 @@ impl<'a> TokenIterator<'a> {
     fn get_float(&mut self, start: (usize, char)) -> Result<Token<'a>, Error> {
         let end = self.consume_while(|(_, x)| x.is_numeric()).unwrap_or(start);
         match self.get_range(start, end).parse::<f64>() {
-            Ok(n) => atom_end(Token::Float(n), self.iter.peek()),
+            Ok(n) => self.atom_end(Token::Float(n)),
             Err(error) => Err(Error::FloatError(error)),
         }
     }
@@ -84,7 +93,7 @@ impl<'a> TokenIterator<'a> {
             }
         }
         match self.get_range(start, end).parse::<isize>() {
-            Ok(n) => atom_end(Token::Int(n), self.iter.peek()),
+            Ok(n) => self.atom_end(Token::Int(n)),
             Err(error) => Err(Error::IntError(error)),
         }
     }
@@ -115,15 +124,6 @@ fn is_atom_terminator(c: char) -> bool {
         c if c.is_whitespace() => true,
         _ => false,
     }
-}
-
-fn atom_end<'a>(token: Token<'a>, next: Option<&(usize, char)>) -> Result<Token<'a>, Error> {
-    if let Some((_, c)) = next {
-        if is_atom_terminator(*c) {
-            return Ok(token);
-        }
-    }
-    Err(Error::AtomTerminationError)
 }
 
 #[derive(Debug)]
