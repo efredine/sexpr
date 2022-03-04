@@ -165,13 +165,10 @@ impl<'a> ExpressionParser<'a> {
 
     fn get_expression(&mut self) -> Result<Expr<'a>, Error> {
         if let Some(result) = self.iter.next() {
-            return match result {
-                Ok(token) => match token {
-                    Token::LeftPar => self.parse_expression(),
-                    _ => Err(Error::InvalidRootExpression),
-                },
-                Err(e) => Err(e),
-            };
+            return result.and_then(|token| match token {
+                Token::LeftPar => self.parse_expression(),
+                _ => Err(Error::InvalidRootExpression),
+            });
         }
         Err(Error::MissingRootExpression)
     }
