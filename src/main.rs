@@ -93,10 +93,7 @@ impl<'a> Iterator for TokenIterator<'a> {
                 _ => Some(self.get_str(i)),
             };
             match token {
-                Some(r) => match r {
-                    Ok(t) => return Some(Ok(t)),
-                    Err(error) => return Some(Err(error.to_string())),
-                },
+                Some(r) => return Some(r),
                 None => continue,
             }
         }
