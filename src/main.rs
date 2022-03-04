@@ -11,6 +11,7 @@ enum Token<'a> {
     RightPar,
 }
 
+#[derive(Debug)]
 struct TokenIterator<'a> {
     source: &'a str,
     iter: Peekable<CharIndices<'a>>,
@@ -103,12 +104,6 @@ impl<'a> Iterator for TokenIterator<'a> {
     }
 }
 
-#[derive(Debug)]
-enum Expr<'a> {
-    List(Vec<Expr<'a>>),
-    Atom(&'a Token<'a>),
-}
-
 fn lex(source: &str) -> Result<Vec<Token>, String> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut token_iter = TokenIterator::new(source);
@@ -138,32 +133,39 @@ fn atom_end<'a>(token: Token<'a>, next: Option<&(usize, char)>) -> Result<Token<
     Err(format!("Atom not properly terminated."))
 }
 
-fn get_expression<'a>(tokens: &'a Vec<Token>) -> Result<Expr<'a>, String> {
-    let mut iter = tokens.iter();
-    if let Some(token) = iter.next() {
-        return match token {
-            Token::LeftPar => parse_expression(&mut iter),
-            _ => Err(format!("Invalid root expression.")),
-        };
-    }
-    Err(format!("Missing root expression."))
+#[derive(Debug)]
+enum Expr<'a> {
+    List(Vec<Expr<'a>>),
+    Atom(Token<'a>),
 }
 
-fn parse_expression<'a>(iter: &mut std::slice::Iter<'a, Token>) -> Result<Expr<'a>, String> {
-    let mut expr_list: Vec<Expr<'a>> = Vec::new();
-    while let Some(token) = iter.next() {
-        let node = match token {
-            Token::LeftPar => parse_expression(iter),
-            Token::RightPar => return Ok(Expr::List(expr_list)),
-            _ => Ok(Expr::Atom(&token)),
+fn parse_expression<'a>(iter: &'a mut TokenIterator) -> Result<Expr<'a>, String> {
+    let expr_list: Vec<Expr<'a>> = Vec::new();
+    while let Some(result) = iter.next() {
+        return match result {
+            Ok(token) => match token {
+                Token::LeftPar => parse_expression(iter),
+                Token::RightPar => Ok(Expr::List(expr_list)),
+                _ => Ok(Expr::Atom(token)),
+            },
+            Err(e) => return Err(e),
         };
-        match node {
-            Ok(expr) => expr_list.push(expr),
-            Err(error) => return Err(error),
-        }
     }
 
     Err(format!("Missing closing paren"))
+}
+
+fn get_expression<'a>(iter: &'a mut TokenIterator) -> Result<Expr<'a>, String> {
+    if let Some(result) = iter.next() {
+        return match result {
+            Ok(token) => match token {
+                Token::LeftPar => parse_expression(iter),
+                _ => Err(format!("Invalid root expression.")),
+            },
+            Err(e) => Err(e),
+        };
+    }
+    Err(format!("Missing root expression."))
 }
 
 fn format_expression(expression: &Expr) -> String {
@@ -191,7 +193,7 @@ fn main() {
     println!("{}", expr);
     let tokens = lex(&expr).unwrap();
     println!("{:?}", tokens);
-    let expression = get_expression(&tokens).unwrap();
-    println!("{:?}", expression);
+    let mut iter = TokenIterator::new(&expr);
+    let expression = get_expression(&mut iter).unwrap();
     println!("{}", format_expression(&expression));
 }
