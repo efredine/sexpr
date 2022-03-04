@@ -1,5 +1,17 @@
 use std::iter::Peekable;
+use std::num::{ParseFloatError, ParseIntError};
 use std::str::CharIndices;
+
+#[derive(Debug)]
+enum Error {
+    AtomTerminationError,
+    FloatError(ParseFloatError),
+    IntError(ParseIntError),
+    InvalidRootExpression,
+    MissingClosingParen,
+    MissingRootExpression,
+    QuoteError,
+}
 
 #[derive(Debug)]
 enum Token<'a> {
@@ -23,7 +35,7 @@ impl<'a> TokenIterator<'a> {
         TokenIterator { source, iter }
     }
 
-    fn get_str(&mut self, start: usize) -> Result<Token<'a>, String> {
+    fn get_str(&mut self, start: usize) -> Result<Token<'a>, Error> {
         let mut end = start;
         while let Some((i, _)) = self.iter.next_if(|(_, x)| !is_atom_terminator(*x)) {
             end = i;
@@ -34,7 +46,7 @@ impl<'a> TokenIterator<'a> {
         )
     }
 
-    fn get_quoted(&mut self, start: usize) -> Result<Token<'a>, String> {
+    fn get_quoted(&mut self, start: usize) -> Result<Token<'a>, Error> {
         let mut end = start;
         while let Some((i, _)) = self.iter.next_if(|(_, x)| *x != '"') {
             end = i;
@@ -49,21 +61,21 @@ impl<'a> TokenIterator<'a> {
                 return atom_end(Token::Quoted(result), self.iter.peek());
             }
         }
-        Err(format!("Invalid quoted string."))
+        Err(Error::QuoteError)
     }
 
-    fn get_float(&mut self, start: usize) -> Result<Token<'a>, String> {
+    fn get_float(&mut self, start: usize) -> Result<Token<'a>, Error> {
         let mut end = start;
         while let Some((i, _)) = self.iter.next_if(|(_, x)| x.is_numeric()) {
             end = i;
         }
         match self.source[start..end + 1].parse::<f64>() {
             Ok(n) => atom_end(Token::Float(n), self.iter.peek()),
-            Err(error) => Err(error.to_string()),
+            Err(error) => Err(Error::FloatError(error)),
         }
     }
 
-    fn get_number(&mut self, start: usize) -> Result<Token<'a>, String> {
+    fn get_number(&mut self, start: usize) -> Result<Token<'a>, Error> {
         let mut end = start;
         while let Some((i, c)) = self.iter.next_if(|(_, x)| x.is_numeric() || *x == '.') {
             end = i;
@@ -73,13 +85,13 @@ impl<'a> TokenIterator<'a> {
         }
         match self.source[start..end + 1].parse::<isize>() {
             Ok(n) => atom_end(Token::Int(n), self.iter.peek()),
-            Err(error) => Err(error.to_string()),
+            Err(error) => Err(Error::IntError(error)),
         }
     }
 }
 
 impl<'a> Iterator for TokenIterator<'a> {
-    type Item = Result<Token<'a>, String>;
+    type Item = Result<Token<'a>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((i, c)) = self.iter.next() {
@@ -105,13 +117,13 @@ fn is_atom_terminator(c: char) -> bool {
     }
 }
 
-fn atom_end<'a>(token: Token<'a>, next: Option<&(usize, char)>) -> Result<Token<'a>, String> {
+fn atom_end<'a>(token: Token<'a>, next: Option<&(usize, char)>) -> Result<Token<'a>, Error> {
     if let Some((_, c)) = next {
         if is_atom_terminator(*c) {
             return Ok(token);
         }
     }
-    Err(format!("Atom not properly terminated."))
+    Err(Error::AtomTerminationError)
 }
 
 #[derive(Debug)]
@@ -132,7 +144,7 @@ impl<'a> ExpressionParser<'a> {
         }
     }
 
-    fn parse_expression(&mut self) -> Result<Expr<'a>, String> {
+    fn parse_expression(&mut self) -> Result<Expr<'a>, Error> {
         let mut expr_list: Vec<Expr> = Vec::new();
         while let Some(result) = self.iter.next() {
             match result {
@@ -148,20 +160,20 @@ impl<'a> ExpressionParser<'a> {
             };
         }
 
-        Err(format!("Missing closing paren"))
+        Err(Error::MissingClosingParen)
     }
 
-    fn get_expression(&mut self) -> Result<Expr<'a>, String> {
+    fn get_expression(&mut self) -> Result<Expr<'a>, Error> {
         if let Some(result) = self.iter.next() {
             return match result {
                 Ok(token) => match token {
                     Token::LeftPar => self.parse_expression(),
-                    _ => Err(format!("Invalid root expression.")),
+                    _ => Err(Error::InvalidRootExpression),
                 },
                 Err(e) => Err(e),
             };
         }
-        Err(format!("Missing root expression."))
+        Err(Error::MissingRootExpression)
     }
 }
 
