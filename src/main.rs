@@ -148,11 +148,13 @@ impl<'a> ExpressionParser<'a> {
     fn parse_expression(&mut self) -> Option<Result<Expr<'a>, Error>> {
         while let Some(result) = self.iter.next() {
             match result {
+                Err(e) => return Some(Err(e)),
                 Ok(token) => match token {
                     Token::LeftPar => {
                         self.stack.push(Vec::new());
                         match self.parse_expression() {
                             Some(result) => match result {
+                                Err(error) => return Some(Err(error)),
                                 Ok(expr) => match self.stack.pop() {
                                     Some(mut top) => {
                                         top.push(expr);
@@ -160,7 +162,6 @@ impl<'a> ExpressionParser<'a> {
                                     }
                                     None => return Some(Ok(expr)),
                                 },
-                                Err(error) => return Some(Err(error)),
                             },
                             None => {
                                 return match self.stack.pop() {
@@ -184,7 +185,6 @@ impl<'a> ExpressionParser<'a> {
                         None => return Some(Ok(Expr::Atom(token))),
                     },
                 },
-                Err(e) => return Some(Err(e)),
             };
         }
 
@@ -229,6 +229,4 @@ fn main() {
     while let Some(parsed_expr) = parser.next() {
         println!("{}", format_expression(&parsed_expr.unwrap()));
     }
-    // let expression = ExpressionParser::new(&expr).get_expression().unwrap();
-    // println!("{}", format_expression(&expression));
 }
