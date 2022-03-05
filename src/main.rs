@@ -7,7 +7,7 @@ enum Error {
     AtomTerminationError,
     FloatError(ParseFloatError),
     IntError(ParseIntError),
-    InvalidRootExpression,
+    TooManyRightParens,
     MissingClosingParen,
     QuoteError,
 }
@@ -170,10 +170,12 @@ impl<'a> ExpressionParser<'a> {
                             }
                         }
                     }
-                    Token::RightPar => match self.stack.pop() {
-                        Some(expr_list) => return Some(Ok(Expr::List(expr_list))),
-                        None => return Some(Err(Error::InvalidRootExpression)),
-                    },
+                    Token::RightPar => {
+                        return match self.stack.pop() {
+                            Some(expr_list) => Some(Ok(Expr::List(expr_list))),
+                            None => Some(Err(Error::TooManyRightParens)),
+                        }
+                    }
                     _ => match self.stack.pop() {
                         Some(mut top) => {
                             top.push(Expr::Atom(token));
