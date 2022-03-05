@@ -145,6 +145,13 @@ impl<'a> ExpressionParser<'a> {
         }
     }
 
+    fn pop_or_else(&mut self, error: Error) -> Option<Result<Expr<'a>, Error>> {
+        match self.stack.pop() {
+            Some(expr_list) => Some(Ok(Expr::List(expr_list))),
+            None => Some(Err(error)),
+        }
+    }
+
     fn parse_expression(&mut self) -> Option<Result<Expr<'a>, Error>> {
         while let Some(result) = self.iter.next() {
             match result {
@@ -163,20 +170,10 @@ impl<'a> ExpressionParser<'a> {
                                     None => return Some(Ok(expr)),
                                 },
                             },
-                            None => {
-                                return match self.stack.pop() {
-                                    None => Some(Err(Error::MissingClosingParen)),
-                                    Some(expr_list) => Some(Ok(Expr::List(expr_list))),
-                                }
-                            }
+                            None => return self.pop_or_else(Error::MissingClosingParen),
                         }
                     }
-                    Token::RightPar => {
-                        return match self.stack.pop() {
-                            Some(expr_list) => Some(Ok(Expr::List(expr_list))),
-                            None => Some(Err(Error::TooManyRightParens)),
-                        }
-                    }
+                    Token::RightPar => return self.pop_or_else(Error::TooManyRightParens),
                     _ => match self.stack.pop() {
                         Some(mut top) => {
                             top.push(Expr::Atom(token));
@@ -185,7 +182,7 @@ impl<'a> ExpressionParser<'a> {
                         None => return Some(Ok(Expr::Atom(token))),
                     },
                 },
-            };
+            }
         }
 
         None
