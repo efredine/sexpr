@@ -145,43 +145,46 @@ impl<'a> ExpressionParser<'a> {
         }
     }
 
-    fn pop_or_else(&mut self, error: Error) -> Option<Result<Expr<'a>, Error>> {
+    fn pop_or_error(&mut self, error: Error) -> Option<Result<Expr<'a>, Error>> {
         match self.stack.pop() {
             Some(expr_list) => Some(Ok(Expr::List(expr_list))),
             None => Some(Err(error)),
         }
     }
 
+    fn append_or_return(&mut self, expr: Expr<'a>) -> Option<Result<Expr<'a>, Error>> {
+        match self.stack.pop() {
+            Some(mut top) => {
+                top.push(expr);
+                self.stack.push(top);
+                None
+            }
+            None => return Some(Ok(expr)),
+        }
+    }
+
     fn parse_expression(&mut self) -> Option<Result<Expr<'a>, Error>> {
-        while let Some(result) = self.iter.next() {
-            match result {
-                Err(e) => return Some(Err(e)),
+        while let Some(token_result) = self.iter.next() {
+            let next_expression = match token_result {
+                Err(e) => Some(Err(e)),
                 Ok(token) => match token {
                     Token::LeftPar => {
                         self.stack.push(Vec::new());
                         match self.parse_expression() {
                             Some(result) => match result {
-                                Err(error) => return Some(Err(error)),
-                                Ok(expr) => match self.stack.pop() {
-                                    Some(mut top) => {
-                                        top.push(expr);
-                                        self.stack.push(top);
-                                    }
-                                    None => return Some(Ok(expr)),
-                                },
+                                Err(error) => Some(Err(error)),
+                                Ok(expr) => self.append_or_return(expr),
                             },
-                            None => return self.pop_or_else(Error::MissingClosingParen),
+                            None => self.pop_or_error(Error::MissingClosingParen),
                         }
                     }
-                    Token::RightPar => return self.pop_or_else(Error::TooManyRightParens),
-                    _ => match self.stack.pop() {
-                        Some(mut top) => {
-                            top.push(Expr::Atom(token));
-                            self.stack.push(top)
-                        }
-                        None => return Some(Ok(Expr::Atom(token))),
-                    },
+                    Token::RightPar => self.pop_or_error(Error::TooManyRightParens),
+                    _ => self.append_or_return(Expr::Atom(token)),
                 },
+            };
+            match next_expression {
+                None => continue,
+                Some(result) => return Some(result),
             }
         }
 
