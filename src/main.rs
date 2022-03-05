@@ -9,7 +9,6 @@ enum Error {
     IntError(ParseIntError),
     InvalidRootExpression,
     MissingClosingParen,
-    MissingRootExpression,
     QuoteError,
 }
 
@@ -134,6 +133,7 @@ enum Expr<'a> {
 
 #[derive(Debug)]
 struct ExpressionParser<'a> {
+    stack: Vec<Vec<Expr<'a>>>,
     iter: TokenIterator<'a>,
 }
 
@@ -141,36 +141,60 @@ impl<'a> ExpressionParser<'a> {
     fn new(source: &'a str) -> ExpressionParser<'a> {
         ExpressionParser {
             iter: TokenIterator::new(source),
+            stack: Vec::new(),
         }
     }
 
-    fn parse_expression(&mut self) -> Result<Expr<'a>, Error> {
-        let mut expr_list: Vec<Expr> = Vec::new();
+    fn parse_expression(&mut self) -> Option<Result<Expr<'a>, Error>> {
         while let Some(result) = self.iter.next() {
             match result {
                 Ok(token) => match token {
-                    Token::LeftPar => match self.parse_expression() {
-                        Ok(e) => expr_list.push(e),
-                        Err(e) => return Err(e),
+                    Token::LeftPar => {
+                        self.stack.push(Vec::new());
+                        match self.parse_expression() {
+                            Some(result) => match result {
+                                Ok(expr) => match self.stack.pop() {
+                                    Some(mut top) => {
+                                        top.push(expr);
+                                        self.stack.push(top);
+                                    }
+                                    None => return Some(Ok(expr)),
+                                },
+                                Err(error) => return Some(Err(error)),
+                            },
+                            None => {
+                                return match self.stack.pop() {
+                                    None => Some(Err(Error::MissingClosingParen)),
+                                    Some(expr_list) => Some(Ok(Expr::List(expr_list))),
+                                }
+                            }
+                        }
+                    }
+                    Token::RightPar => match self.stack.pop() {
+                        Some(expr_list) => return Some(Ok(Expr::List(expr_list))),
+                        None => return Some(Err(Error::InvalidRootExpression)),
                     },
-                    Token::RightPar => return Ok(Expr::List(expr_list)),
-                    _ => expr_list.push(Expr::Atom(token)),
+                    _ => match self.stack.pop() {
+                        Some(mut top) => {
+                            top.push(Expr::Atom(token));
+                            self.stack.push(top)
+                        }
+                        None => return Some(Ok(Expr::Atom(token))),
+                    },
                 },
-                Err(e) => return Err(e),
+                Err(e) => return Some(Err(e)),
             };
         }
 
-        Err(Error::MissingClosingParen)
+        None
     }
+}
 
-    fn get_expression(&mut self) -> Result<Expr<'a>, Error> {
-        if let Some(result) = self.iter.next() {
-            return result.and_then(|token| match token {
-                Token::LeftPar => self.parse_expression(),
-                _ => Err(Error::InvalidRootExpression),
-            });
-        }
-        Err(Error::MissingRootExpression)
+impl<'a> Iterator for ExpressionParser<'a> {
+    type Item = Result<Expr<'a>, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.parse_expression()
     }
 }
 
@@ -199,6 +223,10 @@ fn main() {
     println!("{}", expr);
     let tokens: Result<Vec<_>, _> = TokenIterator::new(&expr).collect();
     println!("{:?}", tokens.unwrap());
-    let expression = ExpressionParser::new(&expr).get_expression().unwrap();
-    println!("{}", format_expression(&expression));
+    let mut parser = ExpressionParser::new(&expr);
+    while let Some(parsed_expr) = parser.next() {
+        println!("{}", format_expression(&parsed_expr.unwrap()));
+    }
+    // let expression = ExpressionParser::new(&expr).get_expression().unwrap();
+    // println!("{}", format_expression(&expression));
 }
