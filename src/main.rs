@@ -10,6 +10,7 @@ enum Error {
     TooManyRightParens,
     MissingClosingParen,
     QuoteError,
+    IncompleteExpression,
 }
 
 #[derive(Debug)]
@@ -188,7 +189,11 @@ impl<'a> ExpressionParser<'a> {
             }
         }
 
-        None
+        if self.stack.is_empty() {
+            None
+        } else {
+            Some(Err(Error::IncompleteExpression))
+        }
     }
 }
 
